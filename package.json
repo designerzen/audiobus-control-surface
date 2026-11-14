@@ -1,8 +1,11 @@
 {
 	"name": "control-surface",
 	"version": "0.1.0",
-	"private": true,
 	"type": "module",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/designerzen/audiobus-control-surface.git"
+	},
 	"exports": {
 		".": "./src/index.ts",
 		"./types": "./src/types.ts",
@@ -19,11 +22,13 @@
 	},
 	"scripts": {
 		"type-check": "tsc --noEmit",
-		"test:browser": "node tests/browser-smoke.mjs"
+		"test:browser": "node tests/browser-smoke.mjs",
+		"test:envelope": "node tests/envelope-browser.mjs"
 	},
 	"devDependencies": {
 		"@webgpu/types": "0.1.74",
+		"playwright": "1.63.0",
 		"typescript": "~5.9.3",
-		"playwright": "1.63.0"
+		"vite": "~8.0.1"
 	}
 }

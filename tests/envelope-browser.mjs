@@ -1,5 +1,5 @@
-import { createRequire } from "node:module"
 import { chromium } from "playwright"
+import { build } from "vite"
 import { mkdtemp, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { resolve, join } from "node:path"
@@ -7,13 +7,6 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 import assert from "node:assert/strict"
 
 const root = fileURLToPath(new URL("../", import.meta.url))
-const { build } = await import(
-	pathToFileURL(
-		createRequire(new URL("../../../app/harmoneasy/package.json", import.meta.url)).resolve(
-			"vite"
-		)
-	).href
-)
 const output = await mkdtemp(join(tmpdir(), "harmoneasy-envelope-"))
 await build({
 	root,
