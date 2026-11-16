@@ -144,8 +144,14 @@ export interface SurfaceTrigger {
 }
 export interface SurfaceWidget {
 	visualiser?: SurfaceVisualiser
-	/** Hardware trigger for buttons, toggles and pads. */
+	/**
+	 * Hardware trigger for buttons, toggles and pads. On FOLLOW_WIDGETS a MIDI CC instead
+	 * sets the value continuously, so any input that sends CC (a fader, a gamepad stick,
+	 * phone tilt) can move dials, sliders and the X axis of an XY pad.
+	 */
 	trigger?: SurfaceTrigger
+	/** MIDI CC that follows the Y axis of an XY pad. */
+	yTrigger?: SurfaceTrigger
 	key: string
 	yKey?: string
 	widget?: WidgetType

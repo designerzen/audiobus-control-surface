@@ -259,6 +259,8 @@ export function bindingKey(componentId: string, controlId: string): string {
 	return JSON.stringify([componentId, controlId])
 }
 export const TRIGGER_WIDGETS: WidgetType[] = ["button", "toggle", "pad"]
+/** Continuous gadgets whose value follows an assigned MIDI CC rather than its presses. */
+export const FOLLOW_WIDGETS: WidgetType[] = ["dial", "slider", "number", "rotation", "xy"]
 export function validTrigger(t: unknown): t is SurfaceTrigger {
 	const { key, midi } = (t ?? {}) as SurfaceTrigger
 	return (
@@ -349,7 +351,8 @@ export function validSurfaces(value: unknown): value is SurfaceState[] {
 						(Number.isInteger(w.column) && w.column >= 0 && w.column <= 31)) &&
 					(w.visualiser === undefined || validVisualiser(w.visualiser)) &&
 					(w.dial === undefined || validDialOptions(w.dial)) &&
-					(w.trigger === undefined || validTrigger(w.trigger))
+					(w.trigger === undefined || validTrigger(w.trigger)) &&
+					(w.yTrigger === undefined || validTrigger(w.yTrigger))
 			)
 		)
 	})

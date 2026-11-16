@@ -45,6 +45,7 @@ import {
 	widgetChoices,
 	ergonomicOrder,
 	TRIGGER_WIDGETS,
+	FOLLOW_WIDGETS,
 	triggerLabel
 } from "./model"
 import { widgetPoint } from "./model"
@@ -119,8 +120,11 @@ export interface SurfaceOptions {
 	 * the graph, where fitting to the window and zoom would feed back into the node size.
 	 */
 	fitHeight?: boolean
-	/** Resolve with the next key press or MIDI note/CC, for assigning hardware triggers. */
-	learnTrigger?(signal: AbortSignal): Promise<SurfaceTrigger>
+	/**
+	 * Resolve with the next key press or MIDI note/CC, for assigning hardware triggers.
+	 * With "cc" it resolves with the next CC of any value, for gadgets that follow a CC.
+	 */
+	learnTrigger?(signal: AbortSignal, kind?: "press" | "cc"): Promise<SurfaceTrigger>
 	change(state: SurfaceState): void
 	configurationChanged?(): void
 }
@@ -877,6 +881,12 @@ export class ControlSurface {
 				}
 			}
 			element.append(control.element)
+			if (config.trigger && FOLLOW_WIDGETS.includes(widget)) {
+				element.dataset.trigger = [config.trigger, config.yTrigger]
+					.filter((t) => t)
+					.map(triggerLabel)
+					.join(" / ")
+			}
 			if (config.trigger && TRIGGER_WIDGETS.includes(widget)) {
 				element.dataset.trigger = triggerLabel(config.trigger)
 				if (config.trigger.key) {
@@ -933,7 +943,9 @@ export class ControlSurface {
 					}),
 					...(this.options.learnTrigger && TRIGGER_WIDGETS.includes(widget)
 						? [this.button("Trigger", () => this.triggerDialog(entry))]
-						: []),
+						: this.options.learnTrigger && FOLLOW_WIDGETS.includes(widget)
+							? [this.button("Control", () => this.followDialog(entry))]
+							: []),
 					this.button("Remove", () => {
 						const index = configurations.indexOf(config)
 						configurations.splice(index, 1)
@@ -1225,6 +1237,114 @@ export class ControlSurface {
 		this.abort.signal.addEventListener(EVENT_ABORT, () => dialog.close(), { once: true })
 		dialog.showModal()
 	}
+	/** Assign the MIDI CC (one per axis of an XY pad) that a continuous gadget follows. */
+	private followDialog(entry: Entry): void {
+		if (!this.editing || this.disposed || !this.options.learnTrigger) {
+			return
+		}
+		const label = entry.binding.descriptor.label
+		const axes: ["trigger" | "yTrigger", string][] = entry.config.yKey
+			? [
+					["trigger", "X"],
+					["yTrigger", "Y"]
+				]
+			: [["trigger", ""]]
+		const dialog = document.createElement("dialog"),
+			heading = document.createElement("h3"),
+			help = document.createElement("p"),
+			current = document.createElement("p"),
+			actions = document.createElement("div")
+		dialog.className = "cs-size-dialog cs-trigger-dialog"
+		dialog.setAttribute("aria-label", `${label} control`)
+		heading.textContent = `Control ${label}`
+		help.textContent =
+			"Choose Learn, then move a knob, fader, stick, phone or any input that sends MIDI CC. Its value then moves this gadget."
+		current.setAttribute("role", "status")
+		let learning: AbortController | undefined,
+			changed = false
+		const learns = axes.map(([field, axis]) => {
+			const learn = this.button(
+				axis ? `Learn ${axis}` : "Learn",
+				() => {
+					learning?.abort()
+					const controller = (learning = new AbortController())
+					show("Waiting for a MIDI CC…")
+					learns.forEach((button) => (button.disabled = true))
+					this.options.learnTrigger!(controller.signal, "cc")
+						.then((trigger) => {
+							if (controller.signal.aborted || !trigger.midi) {
+								return
+							}
+							entry.config[field] = { midi: trigger.midi }
+							changed = true
+							this.save()
+							show()
+							this.layoutStatus.textContent = `${label} follows ${describe()}`
+						})
+						.catch(() => {
+							if (!controller.signal.aborted) {
+								show()
+							}
+						})
+						.finally(() => {
+							learns.forEach((button) => (button.disabled = false))
+						})
+				},
+				"record"
+			)
+			return learn
+		})
+		const describe = () =>
+			axes
+				.filter(([field]) => entry.config[field])
+				.map(
+					([field, axis]) =>
+						`${axis ? `${axis}: ` : ""}${triggerLabel(entry.config[field])}`
+				)
+				.join(" · ")
+		const clear = this.button(
+			"Clear",
+			() => {
+				learning?.abort()
+				delete entry.config.trigger
+				delete entry.config.yTrigger
+				changed = true
+				this.save()
+				show()
+				this.layoutStatus.textContent = `${label} control cleared`
+			},
+			"off"
+		)
+		const show = (message?: string) => {
+			current.textContent = message ?? (describe() || "No control assigned")
+			clear.disabled = !entry.config.trigger && !entry.config.yTrigger
+		}
+		actions.className = "cs-trigger-actions"
+		actions.append(
+			...learns,
+			clear,
+			this.button("Done", () => dialog.close())
+		)
+		show()
+		dialog.append(heading, help, current, actions)
+		document.body.append(dialog)
+		dialog.addEventListener(
+			EVENT_CLOSE,
+			() => {
+				learning?.abort()
+				dialog.remove()
+				if (changed) {
+					this.rebuild()
+				}
+				this.focusLayout(entry.config, "Control")
+			},
+			{ once: true }
+		)
+		this.abort.signal.addEventListener(EVENT_ABORT, () => dialog.close(), {
+			once: true
+		})
+		dialog.showModal()
+	}
 	/**
 	 * Play a gadget from its hardware trigger with the same feedback as a click.
 	 * Returns false when this surface has no available gadget for the key.
@@ -1246,6 +1366,23 @@ export class ControlSurface {
 			)
 		} else {
 			entry.visual.active = false
+		}
+		return true
+	}
+	/**
+	 * Move a continuous gadget from an assigned CC; position is 0..1 along the axis.
+	 * Returns false when this surface has no available gadget for the key.
+	 */
+	follow(key: string, axis: "x" | "y", position: number): boolean {
+		const entry = this.entries.find((e) => e.config.key === key)
+		if (!entry || entry.visual.unavailable || !FOLLOW_WIDGETS.includes(entry.visual.widget)) {
+			return false
+		}
+		if (entry.visual.widget === "xy") {
+			const [x, y] = Array.isArray(entry.visual.value) ? entry.visual.value : [0, 0]
+			this.write(entry, axis === "x" ? [position, y] : [x, position])
+		} else {
+			this.write(entry, denormalize(entry.binding.descriptor, position))
 		}
 		return true
 	}
