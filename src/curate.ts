@@ -37,6 +37,7 @@ export function controlImportance(d: ControlDescriptor, index = 0): number {
 			display: 0.2,
 			number: 0.35,
 			visualiser: 0.3,
+			panel: 0.3,
 			text: 0.05,
 			color: 0.05
 		}[d.widget] ?? 0.3

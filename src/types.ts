@@ -21,6 +21,8 @@ export type WidgetType =
 	| "relative-keys"
 	| "strum"
 	| "visualiser"
+	/** A component's own DOM GUI hosted on the surface; WebGPU draws nothing for it. */
+	| "panel"
 export type VisualiserKind = "notes" | "waveform" | "spectrum" | "level" | "history"
 export interface SurfaceVisualiser {
 	sourceId: string
@@ -168,10 +170,23 @@ export interface SurfaceConnection {
 	componentId: string
 	controlIds: string[]
 }
+/**
+ * A component GUI the surface can lay out as a gadget, for inputs whose interface is
+ * ordinary DOM rather than a set of controls. Placed by a SurfaceWidget with this key.
+ */
+export interface SurfacePanel {
+	key: string
+	/** Stable component identity; shares the component's gadget theme. */
+	sourceId?: string
+	label: string
+	/** Place the GUI inside host and return its cleanup. */
+	mount(host: HTMLElement): () => void
+}
 export interface SurfaceState {
 	background?: SurfaceVisualiser | null
 	visualisersPaused?: boolean
 	beatCues?: boolean
+	/** @deprecated Component ids shown above the gadgets; hosts lay these out as panel widgets. */
 	panels?: string[]
 	id: string
 	name: string

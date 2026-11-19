@@ -71,7 +71,8 @@ export const WIDGET_TYPES: WidgetType[] = [
 	"piano-roll",
 	"relative-keys",
 	"strum",
-	"visualiser"
+	"visualiser",
+	"panel"
 ]
 export const clamp = (v: number, min = 0, max = 1) => Math.max(min, Math.min(max, v))
 export const sameValue = (a: unknown, b: unknown) =>
@@ -257,6 +258,10 @@ export function formatValue(d: ControlDescriptor, value: ControlValue | undefine
 }
 export function bindingKey(componentId: string, controlId: string): string {
 	return JSON.stringify([componentId, controlId])
+}
+/** Surface widget key for a component's GUI panel. */
+export function panelKey(componentId: string): string {
+	return `panel:${componentId}`
 }
 export const TRIGGER_WIDGETS: WidgetType[] = ["button", "toggle", "pad"]
 /** Continuous gadgets whose value follows an assigned MIDI CC rather than its presses. */

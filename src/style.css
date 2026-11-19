@@ -176,6 +176,21 @@
 	border-radius: 10px;
 	overflow: hidden;
 }
+/* A component's own GUI: ordinary DOM that scrolls and takes touch like a page. */
+.cs-panel {
+	position: absolute;
+	inset: 0;
+	overflow: auto;
+	touch-action: auto;
+	background: #0b1422;
+	border: 1px solid color-mix(in oklab, var(--cs-source, #d6fff2) 35%, transparent);
+	border-radius: inherit;
+	box-sizing: border-box;
+}
+.cs-editing .cs-panel {
+	pointer-events: none;
+	opacity: 0.6;
+}
 .cs-semantic {
 	display: grid;
 	gap: var(--cs-gap, 11px);

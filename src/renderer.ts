@@ -1201,7 +1201,9 @@ export class GpuSurfaceRenderer {
 					number: 8,
 					text: 8,
 					color: 8,
-					display: 8
+					display: 8,
+					// Never drawn; the surface leaves DOM panels out of the frame.
+					panel: 8
 				}[w.widget]
 				const dial = dialOptions(
 					w.widget === "rotation" ? { ...w.dial, mode: "rotation" } : (w.dial ?? d.dial)

@@ -60,7 +60,8 @@ import type {
 	SurfaceVisualEffects,
 	VisualiserSource,
 	SurfaceVisualiser,
-	SurfaceMenuAction
+	SurfaceMenuAction,
+	SurfacePanel
 } from "./types"
 
 const largeWidget = (widget: string) =>
@@ -68,7 +69,8 @@ const largeWidget = (widget: string) =>
 	widget === "visualiser" ||
 	isMusicGrid(widget) ||
 	widget === "relative-keys" ||
-	widget === "strum"
+	widget === "strum" ||
+	widget === "panel"
 
 interface Entry {
 	page?: number
@@ -105,6 +107,8 @@ export interface SurfaceOptions {
 	visualEffects?: SurfaceVisualEffects
 	state: SurfaceState
 	bindings: ControlBinding[]
+	/** Component GUIs that can be placed as panel gadgets. */
+	panels?: SurfacePanel[]
 	editing?: boolean
 	menuActions?(): SurfaceMenuAction[]
 	toolbarHost?: HTMLElement
@@ -669,9 +673,27 @@ export class ControlSurface {
 		this.sourceKey.replaceChildren()
 		const sources = new Set<string>()
 		for (const config of configurations) {
-			let binding = config.visualiser
-				? this.visualiserBinding(config.visualiser, config.key)
-				: bindings.get(config.key)
+			const isPanel = config.widget === "panel",
+				panel = isPanel
+					? this.options.panels?.find((p) => p.key === config.key)
+					: undefined
+			let binding = isPanel
+				? panel && {
+						key: panel.key,
+						sourceId: panel.sourceId,
+						sourceLabel: panel.label,
+						descriptor: {
+							id: panel.key,
+							label: panel.label,
+							widget: "panel" as const,
+							readOnly: true
+						},
+						read: () => undefined,
+						write: () => {}
+					}
+				: config.visualiser
+					? this.visualiserBinding(config.visualiser, config.key)
+					: bindings.get(config.key)
 			if (config.yKey && binding && bindings.has(config.yKey)) {
 				const x = binding,
 					y = bindings.get(config.yKey)!
@@ -728,11 +750,13 @@ export class ControlSurface {
 				write: () => {}
 			}
 			binding = { ...binding, descriptor: directDescriptor(binding.descriptor) }
-			const widget = config.yKey
-				? "xy"
-				: config.widget && widgetChoices(binding.descriptor).includes(config.widget)
-					? config.widget
-					: choiceWidget(binding.descriptor)
+			const widget = isPanel
+				? "panel"
+				: config.yKey
+					? "xy"
+					: config.widget && widgetChoices(binding.descriptor).includes(config.widget)
+						? config.widget
+						: choiceWidget(binding.descriptor)
 			const element = document.createElement("div")
 			element.className = "cs-widget"
 			const sourceId = binding.sourceId ?? binding.sourceLabel
@@ -827,7 +851,8 @@ export class ControlSurface {
 				version: 0,
 				busy: false,
 				actions: [],
-				missing: unavailable,
+				// Panels own their state; there is no value to read.
+				missing: unavailable || isPanel,
 				reading: false,
 				dirty: true,
 				semanticDirty: true
@@ -835,52 +860,64 @@ export class ControlSurface {
 			if (widget === "pad") {
 				entry.visual.pad = new PadLight()
 			}
-			const control = createDomControl(
+			if (isPanel) {
+				const host = document.createElement("div")
+				host.className = "cs-panel"
+				host.inert = this.editing
+				if (panel) {
+					this.unsubscribers.push(panel.mount(host))
+				} else {
+					host.textContent = "This component is not in the chain."
+				}
+				element.append(host)
+			} else {
+				const control = createDomControl(
+					{
+						...binding,
+						descriptor: {
+							...binding.descriptor,
+							widget,
+							dial: entry.visual.dial,
+							disabled: unavailable || binding.descriptor.disabled
+						}
+					},
+					(value, edge) => void this.write(entry, value, edge)
+				)
+				control.element.className = `cs-semantic cs-${widget}`
+				control.element.inert = this.editing
+				control.element.hidden = this.editing
+				entry.release = control.release
+				this.unsubscribers.push(() => control.destroy?.())
+				entry.visual.relative = control.relative
+				entry.visual.strum = control.strum
+				entry.visual.choices = control.choices
 				{
-					...binding,
-					descriptor: {
-						...binding.descriptor,
-						widget,
-						dial: entry.visual.dial,
-						disabled: unavailable || binding.descriptor.disabled
+					if (widget === "dial" || widget === "rotation") {
+						element.tabIndex = -1
 					}
-				},
-				(value, edge) => void this.write(entry, value, edge)
-			)
-			control.element.className = `cs-semantic cs-${widget}`
-			control.element.inert = this.editing
-			control.element.hidden = this.editing
-			entry.release = control.release
-			this.unsubscribers.push(() => control.destroy?.())
-			entry.visual.relative = control.relative
-			entry.visual.strum = control.strum
-			entry.visual.choices = control.choices
-			{
-				if (widget === "dial" || widget === "rotation") {
-					element.tabIndex = -1
+					element.addEventListener(EVENT_FOCUS_IN, () => {
+						entry.visual.focused = true
+					})
+					element.addEventListener(EVENT_FOCUS_OUT, (event) => {
+						entry.visual.focused =
+							event.relatedTarget instanceof Node && element.contains(event.relatedTarget)
+					})
 				}
-				element.addEventListener(EVENT_FOCUS_IN, () => {
-					entry.visual.focused = true
-				})
-				element.addEventListener(EVENT_FOCUS_OUT, (event) => {
-					entry.visual.focused =
-						event.relatedTarget instanceof Node && element.contains(event.relatedTarget)
-				})
-			}
-			const inputs = control.element.querySelectorAll<
-				HTMLInputElement | HTMLSelectElement | HTMLButtonElement
-			>("input,select,button")
-			entry.update = (value) => {
-				control.update(value)
-				for (const input of inputs) {
-					input.disabled = !!(
-						entry.visual.unavailable ||
-						entry.binding.descriptor.disabled ||
-						entry.binding.descriptor.readOnly
-					)
+				const inputs = control.element.querySelectorAll<
+					HTMLInputElement | HTMLSelectElement | HTMLButtonElement
+				>("input,select,button")
+				entry.update = (value) => {
+					control.update(value)
+					for (const input of inputs) {
+						input.disabled = !!(
+							entry.visual.unavailable ||
+							entry.binding.descriptor.disabled ||
+							entry.binding.descriptor.readOnly
+						)
+					}
 				}
+				element.append(control.element)
 			}
-			element.append(control.element)
 			if (config.trigger && FOLLOW_WIDGETS.includes(widget)) {
 				element.dataset.trigger = [config.trigger, config.yTrigger]
 					.filter((t) => t)
@@ -901,7 +938,11 @@ export class ControlSurface {
 				tools.className = "cs-widget-tools"
 				const kind = document.createElement("select")
 				kind.setAttribute("aria-label", `${binding.descriptor.label} widget`)
-				for (const type of config.yKey ? ["xy"] : widgetChoices(binding.descriptor)) {
+				for (const type of isPanel
+					? ["panel"]
+					: config.yKey
+						? ["xy"]
+						: widgetChoices(binding.descriptor)) {
 					const option = document.createElement("option")
 					option.value = type
 					option.textContent = type
@@ -2371,6 +2412,12 @@ export class ControlSurface {
 			entry.release?.()
 		}
 	}
+	private addPanel(panel: SurfacePanel): void {
+		this.options.state.widgets.push({ key: panel.key, widget: "panel", span: 2 })
+		this.rebuild()
+		this.save()
+		this.layoutStatus.textContent = `${panel.label} panel added`
+	}
 	private addXY(): void {
 		const numeric = this.options.bindings.filter(
 			(b) =>
@@ -2485,8 +2532,9 @@ export class ControlSurface {
 		this.layoutStatus.textContent = this.visualiserCycle?.title ?? "Visualiser changed"
 	}
 	private visibleVisuals(): WidgetVisual[] {
+		// Panels are DOM; a face drawn under them would only show through.
 		const visuals = this.entries
-			.filter((entry) => entry.page === this.currentPage)
+			.filter((entry) => entry.page === this.currentPage && entry.visual.widget !== "panel")
 			.map((entry) => entry.visual)
 		return this.background ? [this.background, ...visuals] : visuals
 	}
@@ -2568,6 +2616,13 @@ export class ControlSurface {
 		choices.className = "cs-add-choices"
 		for (const item of [
 			...(this.options.addControls ?? []).map((item) => ({ ...item, icon: "control" })),
+			...(this.options.panels ?? [])
+				.filter((panel) => !this.options.state.widgets.some((w) => w.key === panel.key))
+				.map((panel) => ({
+					label: `Add ${panel.label} panel`,
+					icon: "control",
+					action: () => this.addPanel(panel)
+				})),
 			{ label: "Add XY pad", icon: "xy", action: () => this.addXY() },
 			{ label: "Add visualiser…", icon: "visualiser", action: () => this.addVisualiser() }
 		]) {
