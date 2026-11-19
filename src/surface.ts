@@ -674,9 +674,7 @@ export class ControlSurface {
 		const sources = new Set<string>()
 		for (const config of configurations) {
 			const isPanel = config.widget === "panel",
-				panel = isPanel
-					? this.options.panels?.find((p) => p.key === config.key)
-					: undefined
+				panel = isPanel ? this.options.panels?.find((p) => p.key === config.key) : undefined
 			let binding = isPanel
 				? panel && {
 						key: panel.key,
@@ -900,7 +898,8 @@ export class ControlSurface {
 					})
 					element.addEventListener(EVENT_FOCUS_OUT, (event) => {
 						entry.visual.focused =
-							event.relatedTarget instanceof Node && element.contains(event.relatedTarget)
+							event.relatedTarget instanceof Node &&
+							element.contains(event.relatedTarget)
 					})
 				}
 				const inputs = control.element.querySelectorAll<
