@@ -158,6 +158,7 @@ export function createDropdown(label: string, actionMenu = true, beforeOpen?: ()
 				return
 			}
 			if (event.key === "Tab") {
+				event.preventDefault()
 				close(true)
 				return
 			}

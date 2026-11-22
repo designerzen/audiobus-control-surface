@@ -495,6 +495,98 @@
 .cs-drop-target {
 	outline: 2px solid white !important;
 }
+.cs-move-banner {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px 12px;
+	margin-bottom: 8px;
+	padding: 8px 12px;
+	border: 1px solid var(--col-accent, #2effb3);
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--col-accent, #2effb3) 14%, #080d18);
+	color: #d6fff2;
+	font-size: 13px;
+}
+.cs-move-banner[hidden] {
+	display: none;
+}
+.cs-move-banner-step {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: var(--col-accent, #2effb3);
+	color: #04140f;
+	font-size: 11px;
+	font-weight: 700;
+	margin-right: 8px;
+}
+.cs-move-banner button {
+	min-height: var(--cs-target, 44px);
+	padding: 4px 12px;
+	border: 1px solid var(--col-accent, #2effb3);
+	border-radius: 6px;
+	background: #112438;
+	color: #d6fff2;
+	font: inherit;
+	cursor: pointer;
+}
+.cs-moving .cs-widget.cs-moving-source {
+	outline: 3px solid var(--col-accent, #2effb3) !important;
+	outline-offset: -3px;
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--col-accent, #2effb3) 35%, transparent);
+	z-index: 4;
+}
+.cs-moving .cs-widget.cs-move-destination {
+	outline: 2px dashed var(--col-accent, #2effb3) !important;
+	outline-offset: -2px;
+}
+.cs-moving .cs-widget.cs-move-destination.cs-drop-before,
+.cs-moving .cs-widget.cs-move-destination:has(.cs-move-slot-before:hover, .cs-move-slot-before:focus-visible) {
+	box-shadow: inset 6px 0 0 var(--col-accent, #2effb3);
+}
+.cs-moving .cs-widget.cs-move-destination.cs-drop-after,
+.cs-moving .cs-widget.cs-move-destination:has(.cs-move-slot-after:hover, .cs-move-slot-after:focus-visible) {
+	box-shadow: inset -6px 0 0 var(--col-accent, #2effb3);
+}
+.cs-move-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 6;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 6px;
+	padding: 8px;
+	background: color-mix(in oklab, #080d18 82%, transparent);
+	align-items: center;
+}
+.cs-move-slot {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	min-height: var(--cs-target, 44px);
+	height: 100%;
+	padding: 6px 8px;
+	border: 2px dashed var(--col-accent, #2effb3);
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--col-accent, #2effb3) 14%, #112438);
+	color: #d6fff2;
+	font: inherit;
+	font-size: 12px;
+	font-weight: 700;
+	cursor: pointer;
+}
+.cs-move-slot:hover,
+.cs-move-slot:focus-visible {
+	background: var(--col-accent, #2effb3);
+	color: #04140f;
+	border-style: solid;
+	outline: 2px solid white;
+	outline-offset: 2px;
+}
 .cs-widget:focus-within {
 	outline: 2px solid white;
 	outline-offset: -2px;
@@ -914,14 +1006,15 @@
 
 .cs-gpu-ready .cs-semantic.cs-envelope:focus-within {
 	inset: auto 12px 2px;
-	height: 36px !important;
-	padding: 0 !important;
+	height: auto !important;
+	min-height: 44px;
+	padding: 4px 6px !important;
 	grid-template-columns: repeat(4, minmax(0, 1fr));
 	gap: 8px;
 	background: #2b2b2b;
 }
 .cs-gpu-ready .cs-envelope:focus-within > label {
-	font-size: 0;
+	font-size: 0.75rem;
 }
 .cs-gpu-ready .cs-envelope:focus-within input {
 	min-width: 0;

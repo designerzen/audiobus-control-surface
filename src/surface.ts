@@ -172,6 +172,8 @@ export class ControlSurface {
 	private visible = true
 	private disposed = false
 	private editing = false
+	private movingWidget?: SurfaceWidget
+	private movingLabel = ""
 	private cancelLayoutGesture?: () => void
 	private frame = 0
 	private poll = 0
@@ -186,6 +188,7 @@ export class ControlSurface {
 	private toolbar = document.createElement("div")
 	private sourceKey = document.createElement("ul")
 	private layoutStatus = document.createElement("p")
+	private moveBanner = document.createElement("div")
 	private settings?: ReturnType<typeof createDropdown>
 	get isEditing(): boolean {
 		return this.editing
@@ -231,6 +234,7 @@ export class ControlSurface {
 		)
 		this.viewport.append(this.stage)
 		this.pageNavigation.className = "cs-page-navigation"
+		this.pageNavigation.setAttribute("role", "group")
 		this.pageNavigation.setAttribute("aria-label", "Gadget pages")
 		this.pageLabel.setAttribute("role", "status")
 		this.pageNavigation.append(this.previousPage, this.pageLabel, this.nextPage)
@@ -278,6 +282,10 @@ export class ControlSurface {
 			this.editing ? "Perform" : "Edit layout",
 			() => {
 				this.editing = !this.editing
+				if (!this.editing) {
+					this.movingWidget = undefined
+					this.movingLabel = ""
+				}
 				this.label(
 					edit,
 					this.editing ? "Perform" : "Edit layout",
@@ -368,7 +376,6 @@ export class ControlSurface {
 			() => this.cycleVisualiser(),
 			"visualiser"
 		)
-		this.visualiserCycle.setAttribute("aria-label", "Switch visualiser")
 		toolbar.append(edit, settings.element, add, name, this.visualiserCycle, this.vrButton)
 		if (options.share) {
 			const share = this.button(
@@ -392,6 +399,9 @@ export class ControlSurface {
 		this.layoutStatus.className = "cs-sr-only"
 		this.layoutStatus.setAttribute("role", "status")
 		this.layoutActions.className = "cs-layout-actions"
+		this.moveBanner.className = "cs-move-banner"
+		this.moveBanner.hidden = true
+		this.moveBanner.setAttribute("role", "status")
 		this.layoutActions.append(this.button("Auto arrange", () => this.autoArrange(), "arrange"))
 		if (options.fillControls) {
 			this.layoutActions.append(
@@ -404,6 +414,7 @@ export class ControlSurface {
 		}
 		this.element.append(
 			this.layoutActions,
+			this.moveBanner,
 			this.viewport,
 			this.pageNavigation,
 			this.fill,
@@ -562,6 +573,10 @@ export class ControlSurface {
 		if (event.key === "Escape") {
 			event.preventDefault()
 			event.stopPropagation()
+			if (this.movingWidget) {
+				this.cancelClickMove()
+				return
+			}
 			this.returnToPlaying()
 			return
 		}
@@ -814,7 +829,7 @@ export class ControlSurface {
 					configurations.splice(target, 0, moved)
 					this.rebuild()
 					this.save()
-					this.focusLayout(moved, "Drag")
+					this.focusLayout(moved, "Move")
 					this.layoutStatus.textContent = `Control moved to position ${target + 1} of ${configurations.length}`
 				} catch {
 					/* Ignore unrelated drag data. */
@@ -1033,11 +1048,24 @@ export class ControlSurface {
 					)
 					this.save()
 				})
-				const drag = this.button("Move", () => {})
-				drag.setAttribute("aria-label", `Drag ${binding.descriptor.label}`)
+				const isMovingSource = this.movingWidget === config
+				const drag = this.button(isMovingSource ? "Cancel" : "Move", () => {
+					if (this.movingWidget === config) {
+						this.cancelClickMove()
+					} else {
+						this.startClickMove(config, binding.descriptor.label)
+					}
+				})
+				drag.setAttribute(
+					"aria-label",
+					isMovingSource
+						? `Cancel moving ${binding.descriptor.label}`
+						: `Move ${binding.descriptor.label}`
+				)
+				drag.setAttribute("aria-pressed", String(isMovingSource))
 				drag.setAttribute(
 					"aria-description",
-					"Drag to another position. Use Move earlier or Move later for keyboard or single-click sorting."
+					"Click to pick up and place with 2 clicks, or drag to another position. Use Move earlier or Move later for single-step sorting."
 				)
 				this.layoutHandle(drag, entry, false)
 				this.layoutHandle(resize, entry, true)
@@ -1047,6 +1075,33 @@ export class ControlSurface {
 				size.className = "cs-widget-size"
 				size.setAttribute("aria-hidden", "true")
 				element.append(tools, size, resize)
+				if (this.movingWidget) {
+					if (isMovingSource) {
+						element.classList.add("cs-moving-source")
+					} else {
+						element.classList.add("cs-move-destination")
+						const overlay = document.createElement("div")
+						overlay.className = "cs-move-overlay"
+						const placeBefore = this.button("Place before", () =>
+							this.placeClickMove(config, false)
+						)
+						placeBefore.className = "cs-move-slot cs-move-slot-before"
+						placeBefore.setAttribute(
+							"aria-label",
+							`Place ${this.movingLabel} before ${binding.descriptor.label}`
+						)
+						const placeAfter = this.button("Place after", () =>
+							this.placeClickMove(config, true)
+						)
+						placeAfter.className = "cs-move-slot cs-move-slot-after"
+						placeAfter.setAttribute(
+							"aria-label",
+							`Place ${this.movingLabel} after ${binding.descriptor.label}`
+						)
+						overlay.append(placeBefore, placeAfter)
+						element.append(overlay)
+					}
+				}
 			}
 			this.entries.push(entry)
 			this.stage.append(element)
@@ -1056,13 +1111,22 @@ export class ControlSurface {
 				}) ?? (() => {})
 			)
 		}
+		if (
+			this.movingWidget &&
+			(!this.editing || !configurations.includes(this.movingWidget))
+		) {
+			this.movingWidget = undefined
+			this.movingLabel = ""
+		}
 		this.element.classList.toggle("cs-editing", this.editing)
+		this.element.classList.toggle("cs-moving", Boolean(this.movingWidget))
 		this.layoutActions.hidden = !this.editing
+		this.renderMoveBanner()
 		this.status.textContent = this.entries.length
 			? (this.options.notice ?? "")
 			: this.options.fillControls
-				? "Fill this surface with the chain’s key controls, or drag a component’s Controls connector here."
-				: "Drag a component’s Controls connector here to choose controls."
+				? "Fill this surface with the chain’s key controls, or click or drag a component’s Controls connector here."
+				: "Click or drag a component’s Controls connector here to choose controls."
 		this.fill.hidden = !!this.entries.length || !this.options.fillControls
 		this.layout()
 		void this.refresh()
@@ -1462,6 +1526,82 @@ export class ControlSurface {
 		this.layout()
 		this.layoutStatus.textContent = `${entry.binding.descriptor.label}: width ${entry.config.span}, height ${entry.config.height} pixels`
 	}
+	private renderMoveBanner(): void {
+		if (!this.editing || !this.movingWidget) {
+			this.moveBanner.hidden = true
+			this.moveBanner.replaceChildren()
+			return
+		}
+		const text = document.createElement("span")
+		const step = document.createElement("span")
+		step.className = "cs-move-banner-step"
+		step.textContent = "Step 2 of 2"
+		text.append(
+			step,
+			`Moving ${this.movingLabel} — choose “Place before” or “Place after” on a highlighted control, or press Escape to cancel.`
+		)
+		const cancel = this.button("Cancel move", () => this.cancelClickMove())
+		this.moveBanner.replaceChildren(text, cancel)
+		this.moveBanner.hidden = false
+	}
+	private startClickMove(config: SurfaceWidget, label: string): void {
+		if (!this.editing) {
+			return
+		}
+		this.movingWidget = config
+		this.movingLabel = label
+		this.rebuild()
+		this.layoutStatus.textContent = `Moving ${label}. Choose Place before or Place after on any highlighted control, or press Escape to cancel.`
+		const firstDestination = this.stage.querySelector<HTMLButtonElement>(".cs-move-slot")
+		firstDestination?.focus()
+	}
+	private cancelClickMove(): void {
+		const previous = this.movingWidget
+		const label = this.movingLabel
+		this.movingWidget = undefined
+		this.movingLabel = ""
+		this.rebuild()
+		if (previous) {
+			this.focusLayout(previous, "Move")
+		}
+		if (label) {
+			this.layoutStatus.textContent = `Cancelled moving ${label}.`
+		}
+	}
+	private placeClickMove(target: SurfaceWidget, after: boolean): void {
+		const moving = this.movingWidget
+		const label = this.movingLabel
+		if (!moving || moving === target) {
+			this.cancelClickMove()
+			return
+		}
+		const widgets = this.options.state.widgets
+		const from = widgets.indexOf(moving)
+		if (from < 0) {
+			this.cancelClickMove()
+			return
+		}
+		widgets.splice(from, 1)
+		const targetIndex = widgets.indexOf(target)
+		if (targetIndex < 0) {
+			widgets.splice(from, 0, moving)
+			this.cancelClickMove()
+			return
+		}
+		const to = targetIndex + (after ? 1 : 0)
+		if (target.column !== undefined) {
+			moving.column = target.column
+		} else {
+			delete moving.column
+		}
+		widgets.splice(to, 0, moving)
+		this.movingWidget = undefined
+		this.movingLabel = ""
+		this.rebuild()
+		this.save()
+		this.focusLayout(moving, "Move")
+		this.layoutStatus.textContent = `${label} moved to position ${to + 1} of ${widgets.length}`
+	}
 	private layoutHandle(handle: HTMLButtonElement, entry: Entry, resizing: boolean): void {
 		handle.classList.add("cs-layout-handle")
 		let moved = false,
@@ -1520,6 +1660,12 @@ export class ControlSurface {
 				return
 			}
 			moved ||= Math.hypot(event.clientX - start.x, event.clientY - start.y) > 3
+			if (moved && this.movingWidget) {
+				this.movingWidget = undefined
+				this.movingLabel = ""
+				this.element.classList.remove("cs-moving")
+				this.renderMoveBanner()
+			}
 			event.stopPropagation()
 			if (resizing) {
 				const width = this.stage.clientWidth || 640,
@@ -1598,7 +1744,7 @@ export class ControlSurface {
 							(event.clientY >= targetRect.top + targetRect.height / 2 ? 1 : 0)
 						widgets.splice(to, 0, entry.config)
 						this.rebuild()
-						this.focusLayout(entry.config, "Drag")
+						this.focusLayout(entry.config, "Move")
 						this.layoutStatus.textContent = `${entry.binding.descriptor.label} moved to position ${to + 1} of ${widgets.length}`
 					} else {
 						this.layout()
@@ -2418,6 +2564,10 @@ export class ControlSurface {
 		this.layoutStatus.textContent = `${panel.label} panel added`
 	}
 	private addXY(): void {
+		const previousFocus =
+			document.activeElement instanceof HTMLElement && document.activeElement !== document.body
+				? document.activeElement
+				: null
 		const numeric = this.options.bindings.filter(
 			(b) =>
 				["dial", "slider", "number"].includes(b.descriptor.widget) && !b.descriptor.readOnly
@@ -2461,7 +2611,17 @@ export class ControlSurface {
 		)
 		dialog.append(form)
 		document.body.append(dialog)
-		dialog.addEventListener(EVENT_CLOSE, () => dialog.remove(), { once: true })
+		dialog.addEventListener(EVENT_KEY_DOWN, (event) => event.stopPropagation())
+		dialog.addEventListener(
+			EVENT_CLOSE,
+			() => {
+				dialog.remove()
+				if (previousFocus?.isConnected) {
+					previousFocus.focus()
+				}
+			},
+			{ once: true }
+		)
 		this.abort.signal.addEventListener(EVENT_ABORT, () => dialog.close(), { once: true })
 		dialog.showModal()
 	}
@@ -2663,6 +2823,10 @@ export class ControlSurface {
 	}
 
 	private addVisualiser(): void {
+		const previousFocus =
+			document.activeElement instanceof HTMLElement && document.activeElement !== document.body
+				? document.activeElement
+				: null
 		const dialog = document.createElement("dialog"),
 			form = document.createElement("form"),
 			title = document.createElement("h2")
@@ -2778,7 +2942,17 @@ export class ControlSurface {
 		form.append(actions)
 		dialog.append(form)
 		document.body.append(dialog)
-		dialog.addEventListener(EVENT_CLOSE, () => dialog.remove(), { once: true })
+		dialog.addEventListener(EVENT_KEY_DOWN, (event) => event.stopPropagation())
+		dialog.addEventListener(
+			EVENT_CLOSE,
+			() => {
+				dialog.remove()
+				if (previousFocus?.isConnected) {
+					previousFocus.focus()
+				}
+			},
+			{ once: true }
+		)
 		this.abort.signal.addEventListener(EVENT_ABORT, () => dialog.close(), { once: true })
 		dialog.showModal()
 	}
