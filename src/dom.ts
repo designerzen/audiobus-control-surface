@@ -54,6 +54,7 @@ export function createDomControl(
 		caption = document.createElement("span")
 	caption.textContent = d.label
 	label.className = "component-control"
+	label.dataset.controlId = d.id
 	label.title = d.help ?? ""
 	label.append(caption)
 	const updates: ((value: ControlValue | undefined) => void)[] = []

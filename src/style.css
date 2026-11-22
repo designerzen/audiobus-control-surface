@@ -544,11 +544,19 @@
 	outline-offset: -2px;
 }
 .cs-moving .cs-widget.cs-move-destination.cs-drop-before,
-.cs-moving .cs-widget.cs-move-destination:has(.cs-move-slot-before:hover, .cs-move-slot-before:focus-visible) {
+.cs-moving
+	.cs-widget.cs-move-destination:has(
+		.cs-move-slot-before:hover,
+		.cs-move-slot-before:focus-visible
+	) {
 	box-shadow: inset 6px 0 0 var(--col-accent, #2effb3);
 }
 .cs-moving .cs-widget.cs-move-destination.cs-drop-after,
-.cs-moving .cs-widget.cs-move-destination:has(.cs-move-slot-after:hover, .cs-move-slot-after:focus-visible) {
+.cs-moving
+	.cs-widget.cs-move-destination:has(
+		.cs-move-slot-after:hover,
+		.cs-move-slot-after:focus-visible
+	) {
 	box-shadow: inset -6px 0 0 var(--col-accent, #2effb3);
 }
 .cs-move-overlay {
@@ -903,7 +911,11 @@
 	gap: var(--cs-choice-gap, 11px);
 	min-width: 0;
 }
+.cs-choice-panel:has(> .cs-choice-navigation[hidden]) {
+	grid-template-rows: minmax(0, 1fr);
+}
 .cs-choice-grid > label {
+	box-sizing: border-box;
 	position: relative;
 	display: grid;
 	place-items: center;

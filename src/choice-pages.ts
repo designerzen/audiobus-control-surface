@@ -14,7 +14,8 @@ export interface ChoicePages {
 	readonly layout: ChoiceLayout
 	readonly revision: number
 	update(value: ControlValue | undefined): void
-	resize(width: number, height: number, scale: number): void
+	/** Omit height for a wrapping, content-sized panel; surface gadgets pass their bounds. */
+	resize(width: number, height?: number, scale?: number): void
 	destroy(): void
 }
 let groupId = 0
@@ -54,7 +55,7 @@ export function createChoicePages(
 		columns = 1,
 		rows = choices.length || 1,
 		height = 160,
-		available = 160,
+		available: number | undefined,
 		gap = 11,
 		revision = 0,
 		selected = -1
@@ -152,21 +153,43 @@ export function createChoicePages(
 		radios[target].focus({ preventScroll: true })
 		apply(choices[target].value)
 	})
-	const resize = (width: number, availableHeight: number, scale: number) => {
+	const resize = (width: number, availableHeight?: number, scale = 1) => {
 		available = availableHeight
-		const nextGap = 11 / scale,
-			target = 44 / scale
-		const nextColumns = Math.max(
+		const contentSized = availableHeight === undefined
+		const nextGap = contentSized ? 8 : 11 / scale,
+			target = contentSized ? 44 : 44 / scale
+		// Ordinary forms can grow vertically. Fit readable labels across their width
+		// instead of stretching a few choices into a fixed-height, paginated gadget.
+		const fontSize = parseFloat(getComputedStyle(grid).fontSize) || 16
+		const labelWidth = contentSized
+			? Math.max(
+					target,
+					Math.min(
+						192,
+						Math.max(0, ...choices.map((choice) => choice.label.length)) *
+							fontSize *
+							0.55 +
+							20
+					)
+				)
+			: target
+		const maxColumns = Math.max(
 			1,
 			Math.min(
-				choices.length <= 4 ? 2 : 3,
+				!contentSized && choices.length <= 4 ? 2 : choices.length || 1,
 				choices.length || 1,
-				Math.floor((width + nextGap) / (target + nextGap))
+				Math.floor((width + nextGap) / (labelWidth + nextGap))
 			)
 		)
-		const allRows = Math.max(1, Math.floor((availableHeight + nextGap) / (target + nextGap)))
+		const count = choices.length || 1
+		const nextColumns = contentSized
+			? Math.ceil(count / Math.ceil(count / maxColumns))
+			: maxColumns
+		const requiredRows = Math.ceil(choices.length / nextColumns)
+		const availableSpace = availableHeight ?? requiredRows * (target + nextGap) - nextGap
+		const allRows = Math.max(1, Math.floor((availableSpace + nextGap) / (target + nextGap)))
 		const paging = choices.length > nextColumns * allRows
-		const nextHeight = Math.max(target, availableHeight - (paging ? target + nextGap : 0))
+		const nextHeight = Math.max(target, availableSpace - (paging ? target + nextGap : 0))
 		const nextRows = Math.max(
 			1,
 			Math.min(
@@ -178,20 +201,26 @@ export function createChoicePages(
 		if (
 			nextCapacity === capacity &&
 			nextColumns === columns &&
+			nextRows === rows &&
 			nextHeight === height &&
 			nextGap === gap
 		) {
 			return
 		}
 		const focused = radios.indexOf(document.activeElement as HTMLInputElement)
+		const start = page * capacity
+		const anchor =
+			focused >= 0
+				? focused
+				: selected >= start && selected < start + capacity
+					? selected
+					: start
 		columns = nextColumns
 		rows = nextRows
 		height = Math.max(target, nextHeight)
 		gap = nextGap
 		capacity = nextCapacity
-		if (focused >= 0) {
-			page = Math.floor(focused / capacity)
-		}
+		page = Math.floor(anchor / capacity)
 		show()
 	}
 	// Only width is observed: until the GPU layer is ready the panel's height is its own grid
@@ -204,7 +233,7 @@ export function createChoicePages(
 	})
 	show()
 	observer.observe(element)
-	resize(300, 160, 1)
+	resize(300)
 	return {
 		element,
 		get layout() {
