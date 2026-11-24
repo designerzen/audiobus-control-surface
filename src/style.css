@@ -73,7 +73,7 @@
 .cs-layout-actions button:active,
 .cs-fill button:active {
 	transform: scale(0.96);
-	background: color-mix(in srgb, currentColor 22%, var(--col-line, #101f2b));
+	background: color-mix(in srgb, currentColor 22%, var(--col-surface-raised, #101f2b));
 }
 .cs-toolbar button[aria-pressed="true"] {
 	border-color: currentColor;
@@ -116,11 +116,29 @@
 .cs-widget-tools select {
 	font: inherit;
 	color: var(--col-fg, #cbfdeb);
-	background: var(--col-line, #101f2b);
-	border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+	/* Line colours become pure white or black in high contrast, so fill with a surface. */
+	background: var(--col-surface-raised, #101f2b);
+	border: 1px solid var(--col-line-strong, color-mix(in srgb, currentColor 30%, transparent));
 	border-radius: 6px;
 	padding: 7px;
 	min-height: var(--cs-target, 44px);
+}
+/* Pick whichever text colour stays readable on the fill, whatever the host theme sets. */
+@supports (color: color-contrast(white vs black, white)) {
+	.cs-toolbar button,
+	.cs-layout-actions button,
+	.cs-toolbar select,
+	.cs-widget-tools button,
+	.cs-widget-tools select {
+		color: color-contrast(
+			var(--col-surface-raised, #101f2b) vs var(--col-fg, #cbfdeb),
+			white,
+			black to AA
+		);
+	}
+	.cs-fill button {
+		color: color-contrast(var(--col-accent, #2effb3) vs #04140f, white, black to AA);
+	}
 }
 .cs-stage {
 	position: relative;
