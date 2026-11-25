@@ -662,6 +662,23 @@
 	width: auto;
 	justify-self: start;
 }
+.component-slider {
+	display: grid;
+	grid-template-columns: 44px minmax(44px, 1fr) 44px;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+.component-slider button {
+	min-width: 44px;
+	min-height: 44px;
+	padding: 0;
+	touch-action: manipulation;
+}
+.component-slider input[type="range"] {
+	min-width: 44px;
+	min-height: 44px;
+}
 .component-controls > [role="alert"]:empty {
 	display: none;
 }

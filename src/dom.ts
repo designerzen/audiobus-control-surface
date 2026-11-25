@@ -314,6 +314,50 @@ export function createDomControl(
 						? "text"
 						: "range"
 		const el = input(type)
+		if (d.widget === "slider") {
+			const row = document.createElement("div"),
+				output = document.createElement("output"),
+				decrease = document.createElement("button"),
+				increase = document.createElement("button")
+			row.className = "component-slider"
+			output.setAttribute("aria-label", `${d.label} value`)
+			const refresh = () => {
+				output.value = formatValue(d, el.valueAsNumber)
+				el.setAttribute("aria-valuetext", output.value)
+				decrease.disabled = el.disabled || el.valueAsNumber <= min
+				increase.disabled = el.disabled || el.valueAsNumber >= max
+			}
+			for (const [button, direction] of [
+				[decrease, -1],
+				[increase, 1]
+			] as const) {
+				button.type = "button"
+				button.textContent = direction < 0 ? "−" : "+"
+				button.setAttribute(
+					"aria-label",
+					`${direction < 0 ? "Decrease" : "Increase"} ${d.label}`
+				)
+				button.addEventListener(EVENT_CLICK, () => {
+					if (button.disabled) {
+						return
+					}
+					const step = d.step && d.step > 0 ? d.step : (max - min) / 100
+					el.value = String(
+						denormalize(d, normalize(d, el.valueAsNumber + direction * step))
+					)
+					refresh()
+					el.dispatchEvent(new Event(EVENT_INPUT, { bubbles: true }))
+				})
+			}
+			row.append(decrease, el, increase)
+			label.append(row, output)
+			refresh()
+			el.addEventListener(EVENT_INPUT, refresh)
+			updates.push((value) => {
+				el.value = String(value ?? d.defaultValue ?? min)
+				refresh()
+			})
+		}
 		if (
 			(d.widget === "dial" || d.widget === "rotation") &&
 			dialOptions(d.widget === "rotation" ? { ...d.dial, mode: "rotation" } : d.dial).mode ===
